@@ -1,13 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { DataTableView } from './components/DataTableView';
 import { ReportsView } from './components/ReportsView';
 import { SettingsView } from './components/SettingsView';
 import { Upload, BarChart3, Settings } from 'lucide-react';
 import logoImage from 'figma:asset/cf7a4147c08e334fdaa8c5b3a4f979427e6594bd.png';
+import { projectId, publicAnonKey } from './utils/supabase/info.tsx';
 
 export default function App() {
   const [data, setData] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true); // Start as true since we load on mount
+  const [isLoading, setIsLoading] = useState(true); // Start as true to load from DB
   const [currentPage, setCurrentPage] = useState<'data' | 'reports' | 'settings'>('data');
   const [recipeTable, setRecipeTable] = useState<any[]>([]);
   const [previousInternalIds, setPreviousInternalIds] = useState<Set<string>>(new Set());
@@ -32,105 +33,172 @@ export default function App() {
     { id: '18', name: 'wine', hex: '#6f2f32' }
   ]);
 
-  // Auto-load CSV files from GitHub on mount
+  // Use ref for debouncing
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const recipeSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Auto-load data from Supabase on mount
   useEffect(() => {
-    loadCSVFromGitHub();
+    loadDataFromSupabase();
   }, []);
 
-  const loadCSVFromGitHub = async () => {
+  // Debounced save function
+  const debouncedSave = (dataToSave: any[]) => {
+    // Clear any existing timeout
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    
+    // Set a new timeout to save after 1 second of inactivity
+    saveTimeoutRef.current = setTimeout(() => {
+      saveDataToSupabase(dataToSave);
+    }, 1000);
+  };
+
+  // Debounced save for recipes
+  const debouncedRecipeSave = (recipesToSave: any[]) => {
+    // Clear any existing timeout
+    if (recipeSaveTimeoutRef.current) {
+      clearTimeout(recipeSaveTimeoutRef.current);
+    }
+    
+    // Set a new timeout to save after 1 second of inactivity
+    recipeSaveTimeoutRef.current = setTimeout(() => {
+      saveRecipesToSupabase(recipesToSave);
+    }, 1000);
+  };
+
+  const loadDataFromSupabase = async () => {
     setIsLoading(true);
     try {
-      // Try multiple URL formats
-      const dataFileVariants = [
-        'https://raw.githubusercontent.com/poehomage/Hams/main/MASTER%20MONSTER%20-%20SAMPLE.csv',
-        'https://raw.githubusercontent.com/poehomage/Hams/master/MASTER%20MONSTER%20-%20SAMPLE.csv',
-        `https://raw.githubusercontent.com/poehomage/Hams/main/${encodeURIComponent('MASTER MONSTER - SAMPLE.csv')}`,
-      ];
+      const serverUrl = `https://${projectId}.supabase.co/functions/v1/make-server-0d1e2a2d`;
       
-      const recipeFileVariants = [
-        'https://raw.githubusercontent.com/poehomage/Hams/main/MASTER%20MONSTER%20-%20RECIPES%20SAMPLE.csv',
-        'https://raw.githubusercontent.com/poehomage/Hams/master/MASTER%20MONSTER%20-%20RECIPES%20SAMPLE.csv',
-        `https://raw.githubusercontent.com/poehomage/Hams/main/${encodeURIComponent('MASTER MONSTER - RECIPES SAMPLE.csv')}`,
-      ];
-      
-      // Try to load main data table CSV
-      console.log('Fetching data table CSV...');
-      let dataLoaded = false;
-      for (const url of dataFileVariants) {
-        console.log('Trying:', url);
-        const dataResponse = await fetch(url);
-        console.log('Response status:', dataResponse.status);
-        
-        if (dataResponse.ok) {
-          const dataText = await dataResponse.text();
-          console.log('Data text length:', dataText.length);
-          const rows = parseCSV(dataText);
-          console.log('Parsed rows:', rows.length);
-          setData(rows);
-          dataLoaded = true;
-          console.log('✅ Data loaded successfully from:', url);
-          break;
+      // Load main data table
+      console.log('Loading data from Supabase...');
+      const dataResponse = await fetch(`${serverUrl}/load-data`, {
+        headers: {
+          'Authorization': `Bearer ${publicAnonKey}`
         }
-      }
+      });
       
-      if (!dataLoaded) {
-        console.error('❌ Failed to load data CSV from any variant');
-      }
-
-      // Try to load recipe table CSV
-      console.log('Fetching recipe table CSV...');
-      let recipeLoaded = false;
-      for (const url of recipeFileVariants) {
-        console.log('Trying:', url);
-        const recipeResponse = await fetch(url);
-        console.log('Response status:', recipeResponse.status);
-        
-        if (recipeResponse.ok) {
-          const recipeText = await recipeResponse.text();
-          console.log('Recipe text length:', recipeText.length);
-          const recipeRows = parseRecipeCSV(recipeText);
-          console.log('Parsed recipe rows:', recipeRows.length);
-          setRecipeTable(recipeRows);
-          recipeLoaded = true;
-          console.log('✅ Recipe loaded successfully from:', url);
-          break;
+      if (dataResponse.ok) {
+        const { data: loadedData } = await dataResponse.json();
+        if (loadedData && loadedData.length > 0) {
+          setData(loadedData);
+          console.log(`✅ Loaded ${loadedData.length} rows from Supabase`);
+        } else {
+          console.log('No data found in Supabase');
         }
+      } else {
+        console.error('Failed to load data from Supabase');
       }
       
-      if (!recipeLoaded) {
-        console.error('❌ Failed to load recipe CSV from any variant');
+      // Load recipe table
+      console.log('Loading recipes from Supabase...');
+      const recipeResponse = await fetch(`${serverUrl}/load-recipes`, {
+        headers: {
+          'Authorization': `Bearer ${publicAnonKey}`
+        }
+      });
+      
+      if (recipeResponse.ok) {
+        const { recipes: loadedRecipes } = await recipeResponse.json();
+        if (loadedRecipes && loadedRecipes.length > 0) {
+          setRecipeTable(loadedRecipes);
+          console.log(`✅ Loaded ${loadedRecipes.length} recipes from Supabase`);
+        } else {
+          console.log('No recipes found in Supabase');
+        }
+      } else {
+        console.error('Failed to load recipes from Supabase');
       }
     } catch (error) {
-      console.error('Failed to load CSV files from GitHub:', error);
+      console.error('Error loading from Supabase:', error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const parseRecipeCSV = (text: string) => {
-    const lines = text.split('\n');
-    const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
-    
-    return lines.slice(1)
-      .filter(line => line.trim())
-      .map((line, index) => {
-        const values = parseCSVLine(line);
-        return {
-          id: `recipe-${index}`,
-          blankSilo: values[0] || '',
-          materialType: values[1] || '',
-          A: values[2] || '',
-          B: values[3] || '',
-          C: values[4] || '',
-          D: values[5] || '',
-          E: values[6] || ''
-        };
+  const saveDataToSupabase = async (dataToSave: any[]) => {
+    try {
+      const serverUrl = `https://${projectId}.supabase.co/functions/v1/make-server-0d1e2a2d`;
+      
+      const response = await fetch(`${serverUrl}/save-data`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${publicAnonKey}`
+        },
+        body: JSON.stringify({ data: dataToSave })
       });
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log('✅ Data saved to Supabase:', result.message);
+        return true;
+      } else {
+        const error = await response.json();
+        console.error('Failed to save data:', error);
+        return false;
+      }
+    } catch (error) {
+      console.error('Error saving to Supabase:', error);
+      return false;
+    }
+  };
+
+  const saveRecipesToSupabase = async (recipesToSave: any[]) => {
+    try {
+      const serverUrl = `https://${projectId}.supabase.co/functions/v1/make-server-0d1e2a2d`;
+      
+      const response = await fetch(`${serverUrl}/save-recipes`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${publicAnonKey}`
+        },
+        body: JSON.stringify({ recipes: recipesToSave })
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log('✅ Recipes saved to Supabase:', result.message);
+        return true;
+      } else {
+        const error = await response.json();
+        console.error('Failed to save recipes:', error);
+        return false;
+      }
+    } catch (error) {
+      console.error('Error saving recipes to Supabase:', error);
+      return false;
+    }
+  };
+
+  const parseCSVLine = (line: string) => {
+    const result = [];
+    let current = '';
+    let inQuotes = false;
+    
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === ',' && !inQuotes) {
+        result.push(current.trim().replace(/^"|"$/g, ''));
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    result.push(current.trim().replace(/^"|"$/g, ''));
+    return result;
   };
 
   const parseCSV = (text: string) => {
     const lines = text.split('\n');
-    const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+    const headers = parseCSVLine(lines[0]); // Use parseCSVLine for headers too
     const currentDate = new Date().toISOString();
     
     const newRows = lines.slice(1)
@@ -165,38 +233,21 @@ export default function App() {
     return newRows;
   };
 
-  const parseCSVLine = (line: string) => {
-    const result = [];
-    let current = '';
-    let inQuotes = false;
-    
-    for (let i = 0; i < line.length; i++) {
-      const char = line[i];
-      
-      if (char === '"') {
-        inQuotes = !inQuotes;
-      } else if (char === ',' && !inQuotes) {
-        result.push(current.trim().replace(/^"|"$/g, ''));
-        current = '';
-      } else {
-        current += char;
-      }
-    }
-    result.push(current.trim().replace(/^"|"$/g, ''));
-    return result;
-  };
-
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     setIsLoading(true);
     const reader = new FileReader();
     
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       const text = e.target?.result as string;
       const rows = parseCSV(text);
       setData(rows);
+      
+      // Auto-save to Supabase
+      await saveDataToSupabase(rows);
+      
       setIsLoading(false);
     };
     
@@ -260,7 +311,7 @@ export default function App() {
                   </div>
                   <h2 className="mb-2">Loading Data...</h2>
                   <p className="text-gray-600">
-                    Loading CSV files from GitHub
+                    Loading data from Supabase...
                   </p>
                 </div>
               </div>
@@ -288,15 +339,24 @@ export default function App() {
                   <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-left">
                     <p className="text-blue-900 mb-2"><strong>💡 Getting Started:</strong></p>
                     <ul className="text-blue-800 space-y-1 list-disc list-inside">
-                      <li>Data automatically loads from GitHub on startup</li>
-                      <li>Or manually upload a CSV file from your computer</li>
-                      <li>For large datasets, filter to a manageable size before exporting</li>
+                      <li>Upload a CSV file to get started</li>
+                      <li>Data is automatically saved to Supabase</li>
+                      <li>Your data persists across sessions</li>
                     </ul>
                   </div>
                 </div>
               </div>
             ) : (
-              <DataTableView data={data} setData={setData} onReload={() => setData([])} recipeTable={recipeTable} colors={colors} />
+              <DataTableView 
+                data={data} 
+                setData={(newData) => {
+                  setData(newData);
+                  debouncedSave(newData);
+                }} 
+                onReload={() => setData([])} 
+                recipeTable={recipeTable} 
+                colors={colors} 
+              />
             )}
           </>
         ) : currentPage === 'reports' ? (
@@ -304,7 +364,10 @@ export default function App() {
         ) : (
           <SettingsView 
             recipeTable={recipeTable} 
-            setRecipeTable={setRecipeTable}
+            setRecipeTable={(newRecipes) => {
+              setRecipeTable(newRecipes);
+              debouncedRecipeSave(newRecipes);
+            }}
             colors={colors}
             setColors={setColors}
           />

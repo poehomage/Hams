@@ -26,47 +26,41 @@ export function DataTableView({ data, setData, onReload, recipeTable, colors }: 
 
   const columns = useMemo(() => {
     if (data.length === 0) return [];
+    
+    // Define the exact column order
+    const defaultColumnOrder = [
+      'Internal ID',
+      'Blank Silo',
+      'Style',
+      'Shopify Display Color',
+      'Size',
+      'Placement from Collar',
+      'AW_Front',
+      'AW_Back',
+      'AW_LS',
+      'AW_RS',
+      'AW_Neck',
+      'Spec_Sheet',
+      'Back from Collar',
+      'Spec_Sheet 2',
+      'Recipe',
+      'Master Graphic',
+      'Production Folder',
+      'HMG Print Note'
+    ];
+    
+    // Get all columns from the data
     const allColumns = Object.keys(data[0]).filter(key => key !== '_id');
     
     // Remove unwanted columns
-    const columnsToRemove = ['Ready to Activate', 'Ready to Activate?', 'MD Active', 'Color+Size', 'MD APPROVED', 'Notes', 'Display Name', 'Blank Color', '_isNew', '_addedDate'];
+    const columnsToRemove = ['Ready to Activate', 'Ready to Activate?', 'MD Active', 'Color+Size', 'Color + Size', 'MD APPROVED', 'Notes', 'Display Name', 'Blank Color', '_isNew', '_addedDate'];
     const filteredColumns = allColumns.filter(col => !columnsToRemove.includes(col));
     
-    // Move "Production Folder", "HMG Print Note" after "Master Graphic"
-    const columnsAfterMasterGraphic = ['Production Folder', 'HMG Print Note'];
-    const masterGraphicIndex = filteredColumns.indexOf('Master Graphic');
+    // Sort columns based on default order, then add any remaining columns at the end
+    const orderedColumns = defaultColumnOrder.filter(col => filteredColumns.includes(col));
+    const remainingColumns = filteredColumns.filter(col => !defaultColumnOrder.includes(col));
     
-    if (masterGraphicIndex !== -1) {
-      const withoutMovedColumns = filteredColumns.filter(col => !columnsAfterMasterGraphic.includes(col));
-      const newMasterGraphicIndex = withoutMovedColumns.indexOf('Master Graphic');
-      
-      const reorderedColumns = [
-        ...withoutMovedColumns.slice(0, newMasterGraphicIndex + 1),
-        ...columnsAfterMasterGraphic.filter(col => filteredColumns.includes(col)),
-        ...withoutMovedColumns.slice(newMasterGraphicIndex + 1)
-      ];
-      
-      filteredColumns.splice(0, filteredColumns.length, ...reorderedColumns);
-    }
-    
-    // Move "Back from Collar", "Spec_Sheet 2", and "Recipe" right after "Spec_Sheet"
-    const columnsAfterSpecSheet = ['Back from Collar', 'Spec_Sheet 2', 'Recipe'];
-    const specSheetIndex = filteredColumns.indexOf('Spec_Sheet');
-    
-    if (specSheetIndex !== -1) {
-      const withoutMovedColumns = filteredColumns.filter(col => !columnsAfterSpecSheet.includes(col));
-      const newSpecSheetIndex = withoutMovedColumns.indexOf('Spec_Sheet');
-      
-      const reorderedColumns = [
-        ...withoutMovedColumns.slice(0, newSpecSheetIndex + 1),
-        ...columnsAfterSpecSheet.filter(col => filteredColumns.includes(col)),
-        ...withoutMovedColumns.slice(newSpecSheetIndex + 1)
-      ];
-      
-      return reorderedColumns;
-    }
-    
-    return filteredColumns;
+    return [...orderedColumns, ...remainingColumns];
   }, [data]);
 
   const filteredAndSortedData = useMemo(() => {
