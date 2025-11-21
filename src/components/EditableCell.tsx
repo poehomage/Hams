@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { Pencil, Upload, Check, X } from 'lucide-react';
+import { Pencil, Check, X } from 'lucide-react';
+import { URLUpdateModal } from './URLUpdateModal';
+import { URLPreview } from './URLPreview';
 
 interface EditableCellProps {
   row: any;
@@ -7,6 +9,7 @@ interface EditableCellProps {
   value: string;
   onUpdate: (row: any, column: string, value: string) => void;
   recipeTable: any[];
+  colors: any[];
 }
 
 const EDITABLE_URL_FIELDS = [
@@ -20,13 +23,25 @@ const EDITABLE_URL_FIELDS = [
   'Spec_Sheet 2'
 ];
 
-export function EditableCell({ row, column, value, onUpdate, recipeTable }: EditableCellProps) {
+const EDITABLE_TEXT_FIELDS = [
+  'Placement from Collar',
+  'Back from Collar'
+];
+
+export function EditableCell({ row, column, value, onUpdate, recipeTable, colors }: EditableCellProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(value || '');
   const [showHover, setShowHover] = useState(false);
+  const [showURLModal, setShowURLModal] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewPosition, setPreviewPosition] = useState({ x: 0, y: 0 });
+
+  const isURLField = EDITABLE_URL_FIELDS.includes(column);
+  const isTextField = EDITABLE_TEXT_FIELDS.includes(column);
+  const isRecipeField = column === 'Recipe';
 
   const handleSave = () => {
-    if (column === 'Recipe') {
+    if (isRecipeField) {
       // Handle recipe lookup
       const blankSilo = row['Blank Silo'];
       if (blankSilo && editValue) {
@@ -53,20 +68,85 @@ export function EditableCell({ row, column, value, onUpdate, recipeTable }: Edit
     setIsEditing(false);
   };
 
-  const handleFileUpload = (file: File) => {
-    const url = URL.createObjectURL(file);
-    setEditValue(url);
+  const handleURLSave = (newURL: string) => {
+    onUpdate(row, column, newURL);
   };
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setIsEditing(true);
+    
+    if (isURLField) {
+      setShowURLModal(true);
+    } else {
+      setIsEditing(true);
+    }
   };
 
+  const handleMouseEnter = (e: React.MouseEvent) => {
+    if (isURLField && value) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      setPreviewPosition({
+        x: rect.right + 10,
+        y: rect.top
+      });
+      setShowPreview(true);
+    }
+    setShowHover(true);
+  };
+
+  const handleMouseLeave = () => {
+    setShowPreview(false);
+    setShowHover(false);
+  };
+
+  // For URL fields, show different UI
+  if (isURLField) {
+    return (
+      <>
+        <div
+          className="relative group flex items-center gap-2 cursor-pointer"
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+          onClick={handleClick}
+        >
+          <div className="truncate max-w-xs flex-1" title={value}>
+            {value ? (
+              <span className="text-blue-600 hover:underline">{value}</span>
+            ) : (
+              <span className="text-gray-400 italic">Click to add URL</span>
+            )}
+          </div>
+          {showHover && (
+            <button
+              className="p-1 bg-blue-100 rounded text-blue-600"
+              title="Update URL"
+            >
+              <Pencil className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+
+        {showPreview && value && (
+          <URLPreview url={value} position={previewPosition} />
+        )}
+
+        {showURLModal && (
+          <URLUpdateModal
+            currentURL={value}
+            fieldName={column}
+            onSave={handleURLSave}
+            onClose={() => setShowURLModal(false)}
+          />
+        )}
+      </>
+    );
+  }
+
+  // For text and recipe fields, inline editing
   if (isEditing) {
     return (
       <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-        {column === 'Recipe' ? (
+        {isRecipeField ? (
           <select
             value={editValue}
             onChange={(e) => setEditValue(e.target.value)}
@@ -97,20 +177,6 @@ export function EditableCell({ row, column, value, onUpdate, recipeTable }: Edit
               if (e.key === 'Escape') handleCancel();
             }}
           />
-        )}
-        {EDITABLE_URL_FIELDS.includes(column) && (
-          <label className="p-1 hover:bg-gray-100 rounded cursor-pointer" title="Upload file">
-            <Upload className="w-4 h-4 text-gray-600" />
-            <input
-              type="file"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleFileUpload(file);
-              }}
-              className="hidden"
-              accept="image/*,.pdf"
-            />
-          </label>
         )}
         <button
           onClick={handleSave}

@@ -10,6 +10,7 @@ interface SidePanelProps {
   onClose: () => void;
   width: number;
   onWidthChange: (width: number) => void;
+  colors: any[];
 }
 
 const PREVIEW_FIELDS = [
@@ -30,7 +31,8 @@ export function SidePanel({
   onMinimize, 
   onClose, 
   width,
-  onWidthChange
+  onWidthChange,
+  colors
 }: SidePanelProps) {
   const [isResizing, setIsResizing] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -86,32 +88,14 @@ export function SidePanel({
     const shopifyColor = row['Shopify Display Color'];
     if (!shopifyColor) return '#f3f4f6'; // default gray-100
     
-    // Color mapping for known Shopify Display Colors
-    const colorMap: Record<string, string> = {
-      'ash': '#cccccb',
-      'brown': '#624c46',
-      'charcoal': '#2b2c30',
-      'gold': '#ffcc66',
-      'green': '#319966',
-      'grey': '#97979b',
-      'light blue': '#82a3d1',
-      'navy': '#2e354e',
-      'orange': '#f79868',
-      'pine': '#346734',
-      'red': '#cc3333',
-      'stone': '#d0c9bd',
-      'royal blue': '#4272ab',
-      'royal purple': '#855b8e',
-      'teal': '#00a3b4',
-      'wine': '#6f2f32'
-    };
-    
     // If it's already a hex color, use it directly
     if (shopifyColor.startsWith('#')) return shopifyColor;
     
-    // Look up the color in our mapping (case-insensitive)
+    // Look up the color in our dynamic colors array (case-insensitive)
     const colorKey = shopifyColor.toLowerCase().trim();
-    if (colorMap[colorKey]) return colorMap[colorKey];
+    const colorEntry = colors.find(c => c.name.toLowerCase() === colorKey);
+    
+    if (colorEntry) return colorEntry.hex;
     
     // Fallback to default gray if color not found
     return '#f3f4f6';

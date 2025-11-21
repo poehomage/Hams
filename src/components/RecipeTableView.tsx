@@ -108,15 +108,13 @@ export function RecipeTableView({ recipeTable, setRecipeTable }: RecipeTableView
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+    <div>
       {/* Header */}
-      <div className="p-6 border-b border-gray-200">
-        <div className="flex items-center justify-between mb-4">
+      <div className="mb-6">
+        <div className="flex items-center justify-between">
           <div>
-            <h2 className="mb-2">Recipe Lookup Table</h2>
-            <p className="text-gray-600 text-sm">
-              Define recipe values for each Blank Silo. When a recipe letter is selected, the corresponding value will be saved.
-            </p>
+            <h3 className="mb-1">Recipe Lookup Table</h3>
+            <p className="text-gray-600">Manage recipe values by Blank Silo and Material Type</p>
           </div>
           <div className="flex items-center gap-2">
             <label className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
@@ -145,14 +143,6 @@ export function RecipeTableView({ recipeTable, setRecipeTable }: RecipeTableView
               Add Entry
             </button>
           </div>
-        </div>
-
-        {/* Example */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <p className="text-sm text-blue-900">
-            <strong>Example:</strong> If a row has Blank Silo "Cotton" and you select Recipe "C", 
-            the value from column C for the Cotton row will be saved to the Recipe field.
-          </p>
         </div>
       </div>
 

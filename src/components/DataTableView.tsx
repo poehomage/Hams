@@ -3,15 +3,17 @@ import { Search, Download, Upload, SlidersHorizontal, X, Sparkles } from 'lucide
 import { DataTable } from './DataTable';
 import { SidePanel } from './SidePanel';
 import { AISearchModal } from './AISearchModal';
+import { ExportModal } from './ExportModal';
 
 interface DataTableViewProps {
   data: any[];
   setData: (data: any[]) => void;
   onReload: () => void;
   recipeTable: any[];
+  colors: any[];
 }
 
-export function DataTableView({ data, setData, onReload, recipeTable }: DataTableViewProps) {
+export function DataTableView({ data, setData, onReload, recipeTable, colors }: DataTableViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRow, setSelectedRow] = useState<any | null>(null);
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
@@ -20,10 +22,51 @@ export function DataTableView({ data, setData, onReload, recipeTable }: DataTabl
   const [showAISearch, setShowAISearch] = useState(false);
   const [isPanelMinimized, setIsPanelMinimized] = useState(false);
   const [panelWidth, setPanelWidth] = useState(400);
+  const [showExportModal, setShowExportModal] = useState(false);
 
   const columns = useMemo(() => {
     if (data.length === 0) return [];
-    return Object.keys(data[0]).filter(key => key !== '_id');
+    const allColumns = Object.keys(data[0]).filter(key => key !== '_id');
+    
+    // Remove unwanted columns
+    const columnsToRemove = ['Ready to Activate', 'Ready to Activate?', 'MD Active', 'Color+Size', 'MD APPROVED', 'Notes', 'Display Name', 'Blank Color', '_isNew', '_addedDate'];
+    const filteredColumns = allColumns.filter(col => !columnsToRemove.includes(col));
+    
+    // Move "Production Folder", "HMG Print Note" after "Master Graphic"
+    const columnsAfterMasterGraphic = ['Production Folder', 'HMG Print Note'];
+    const masterGraphicIndex = filteredColumns.indexOf('Master Graphic');
+    
+    if (masterGraphicIndex !== -1) {
+      const withoutMovedColumns = filteredColumns.filter(col => !columnsAfterMasterGraphic.includes(col));
+      const newMasterGraphicIndex = withoutMovedColumns.indexOf('Master Graphic');
+      
+      const reorderedColumns = [
+        ...withoutMovedColumns.slice(0, newMasterGraphicIndex + 1),
+        ...columnsAfterMasterGraphic.filter(col => filteredColumns.includes(col)),
+        ...withoutMovedColumns.slice(newMasterGraphicIndex + 1)
+      ];
+      
+      filteredColumns.splice(0, filteredColumns.length, ...reorderedColumns);
+    }
+    
+    // Move "Back from Collar", "Spec_Sheet 2", and "Recipe" right after "Spec_Sheet"
+    const columnsAfterSpecSheet = ['Back from Collar', 'Spec_Sheet 2', 'Recipe'];
+    const specSheetIndex = filteredColumns.indexOf('Spec_Sheet');
+    
+    if (specSheetIndex !== -1) {
+      const withoutMovedColumns = filteredColumns.filter(col => !columnsAfterSpecSheet.includes(col));
+      const newSpecSheetIndex = withoutMovedColumns.indexOf('Spec_Sheet');
+      
+      const reorderedColumns = [
+        ...withoutMovedColumns.slice(0, newSpecSheetIndex + 1),
+        ...columnsAfterSpecSheet.filter(col => filteredColumns.includes(col)),
+        ...withoutMovedColumns.slice(newSpecSheetIndex + 1)
+      ];
+      
+      return reorderedColumns;
+    }
+    
+    return filteredColumns;
   }, [data]);
 
   const filteredAndSortedData = useMemo(() => {
@@ -40,11 +83,26 @@ export function DataTableView({ data, setData, onReload, recipeTable }: DataTabl
     }
 
     // Apply column filters
+    const dropdownColumns = ['Blank Silo', 'Shopify Display Color', 'Size', 'Placement from Collar', 'Back from Collar'];
     Object.entries(columnFilters).forEach(([column, filterValue]) => {
       if (filterValue) {
-        result = result.filter(row =>
-          String(row[column]).toLowerCase().includes(filterValue.toLowerCase())
-        );
+        // Use exact match for dropdown columns, partial match for text inputs
+        if (dropdownColumns.includes(column)) {
+          // Handle "(Blank)" selection to filter for empty cells
+          if (filterValue === '(Blank)') {
+            result = result.filter(row =>
+              !String(row[column] || '').trim()
+            );
+          } else {
+            result = result.filter(row =>
+              String(row[column]).trim() === filterValue
+            );
+          }
+        } else {
+          result = result.filter(row =>
+            String(row[column]).toLowerCase().includes(filterValue.toLowerCase())
+          );
+        }
       }
     });
 
@@ -80,12 +138,12 @@ export function DataTableView({ data, setData, onReload, recipeTable }: DataTabl
     }));
   };
 
-  const handleExport = () => {
+  const handleExport = (dataToExport: any[]) => {
     const headers = columns.join(',');
-    const rows = filteredAndSortedData.map(row =>
+    const rows = dataToExport.map(row =>
       columns.map(col => {
         const value = String(row[col]);
-        return value.includes(',') ? `"${value}"` : value;
+        return value.includes(',') ? `\"${value}\"` : value;
       }).join(',')
     );
     
@@ -132,6 +190,7 @@ export function DataTableView({ data, setData, onReload, recipeTable }: DataTabl
           }}
           width={panelWidth}
           onWidthChange={setPanelWidth}
+          colors={colors}
         />
       )}
 
@@ -140,7 +199,7 @@ export function DataTableView({ data, setData, onReload, recipeTable }: DataTabl
           {/* Toolbar */}
           <div className="p-4 border-b border-gray-200">
             <div className="flex items-center gap-3 mb-3">
-              <div className="flex-1 relative">
+              <div className="relative w-80">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <input
                   type="text"
@@ -172,18 +231,11 @@ export function DataTableView({ data, setData, onReload, recipeTable }: DataTabl
                 )}
               </button>
               <button
-                onClick={handleExport}
+                onClick={() => setShowExportModal(true)}
                 className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 <Download className="w-5 h-5" />
                 Export
-              </button>
-              <button
-                onClick={onReload}
-                className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                <Upload className="w-5 h-5" />
-                New File
               </button>
             </div>
 
@@ -216,6 +268,7 @@ export function DataTableView({ data, setData, onReload, recipeTable }: DataTabl
             onColumnFilter={handleColumnFilter}
             onUpdate={handleRowUpdate}
             recipeTable={recipeTable}
+            colors={colors}
           />
         </div>
       </div>
@@ -225,6 +278,17 @@ export function DataTableView({ data, setData, onReload, recipeTable }: DataTabl
         <AISearchModal
           onClose={() => setShowAISearch(false)}
           onSearch={handleAISearch}
+          columns={columns}
+        />
+      )}
+
+      {/* Export Modal */}
+      {showExportModal && (
+        <ExportModal
+          onClose={() => setShowExportModal(false)}
+          onExport={handleExport}
+          filteredData={filteredAndSortedData}
+          allData={data}
           columns={columns}
         />
       )}

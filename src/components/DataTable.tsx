@@ -14,6 +14,7 @@ interface DataTableProps {
   onColumnFilter: (column: string, value: string) => void;
   onUpdate: (updatedRow: any) => void;
   recipeTable: any[];
+  colors: any[];
 }
 
 const EDITABLE_URL_FIELDS = [
@@ -32,6 +33,14 @@ const EDITABLE_TEXT_FIELDS = [
   'Back from Collar'
 ];
 
+const DROPDOWN_FILTER_COLUMNS = [
+  'Blank Silo',
+  'Shopify Display Color',
+  'Size',
+  'Placement from Collar',
+  'Back from Collar'
+];
+
 export function DataTable({
   data,
   columns,
@@ -43,8 +52,23 @@ export function DataTable({
   columnFilters,
   onColumnFilter,
   onUpdate,
-  recipeTable
+  recipeTable,
+  colors
 }: DataTableProps) {
+  // Get unique values for dropdown columns
+  const getUniqueValues = (column: string) => {
+    const values = data.map(row => String(row[column] || '').trim());
+    const uniqueValues = [...new Set(values.filter(v => v))].sort();
+    
+    // Add "Blank" option if there are any empty values
+    const hasBlankValues = values.some(v => !v);
+    if (hasBlankValues) {
+      return ['(Blank)', ...uniqueValues];
+    }
+    
+    return uniqueValues;
+  };
+
   const isURL = (value: string) => {
     if (!value) return false;
     const str = String(value).toLowerCase();
@@ -74,10 +98,10 @@ export function DataTable({
   return (
     <div className="overflow-auto max-h-[calc(100vh-280px)]">
       <table className="w-full border-collapse">
-        <thead className="bg-gray-50 sticky top-0 z-10">
+        <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
           <tr>
             {columns.map(column => (
-              <th key={column} className="text-left p-3 border-b border-gray-200 min-w-[150px]">
+              <th key={column} className="text-left p-3 border-b border-gray-200 min-w-[150px] bg-gray-50">
                 <div className="space-y-2">
                   <button
                     onClick={() => onSort(column)}
@@ -87,14 +111,30 @@ export function DataTable({
                     {getSortIcon(column)}
                   </button>
                   {showFilters && (
-                    <input
-                      type="text"
-                      placeholder="Filter..."
-                      value={columnFilters[column] || ''}
-                      onChange={(e) => onColumnFilter(column, e.target.value)}
-                      onClick={(e) => e.stopPropagation()}
-                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    />
+                    DROPDOWN_FILTER_COLUMNS.includes(column) ? (
+                      <select
+                        value={columnFilters[column] || ''}
+                        onChange={(e) => onColumnFilter(column, e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      >
+                        <option value="">All</option>
+                        {getUniqueValues(column).map(value => (
+                          <option key={value} value={value}>
+                            {value}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        placeholder="Filter..."
+                        value={columnFilters[column] || ''}
+                        onChange={(e) => onColumnFilter(column, e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                    )
                   )}
                 </div>
               </th>
@@ -119,6 +159,7 @@ export function DataTable({
                       value={row[column]}
                       onUpdate={handleCellUpdate}
                       recipeTable={recipeTable}
+                      colors={colors}
                     />
                   ) : isURL(row[column]) ? (
                     <URLCell url={row[column]} />
